@@ -3,16 +3,16 @@ import os
 import datetime
 import logging
 
+import secrets
+
 # Constants
-SANDBOX = False
-UPDATE_FILES = False  # Get ticker if already downloaded?
-DATA_FOLDER = "news_data_test/" if SANDBOX else "news_data/"
-PRICE_FOLDER = "alpha_vantage_processed_data/"
-TICKER_FILE = "nyse_tickers.txt"
+from constants import SANDBOX, UPDATE_FILES, DATA_FOLDER
+from process_data import get_tickers
+
 LOG_FOLDER = "logs/"
 
 # IEX cloud settings
-api_token = "Tsk_bb7989a0d56a400ebcdcfcd1827c7f8e" if SANDBOX else "sk_d3676fd812c84568b062d0176ad61667"
+api_token = "Tsk_bb7989a0d56a400ebcdcfcd1827c7f8e" if SANDBOX else secrets.new_keys[0]
 version = "sandbox" if SANDBOX else "v1"
 
 # Setup logging
@@ -24,23 +24,17 @@ logging.basicConfig(filename=logging_file,
 client = pyEX.Client(version=version, api_token=api_token)
 
 
-def get_tickers():
-    """
-    Returns: list of all company tickers that we have price data for
-    """
-    return sorted(os.listdir(PRICE_FOLDER))
-
-
 def download_news():
     """
     Downloads and stores news for all tickers
     """
-    tickers = get_tickers()[:200]
+    tickers = get_tickers()
 
     # Vill ha related==ticker, source=valdsource, lang=en
     news_filter = "datetime,headline,summary,related,lang,source"
 
     counter = 0
+    news_counter = 0
     for ticker in tickers:
         counter += 1
 
@@ -59,9 +53,17 @@ def download_news():
         # Add timezone to index and convert to EST
         news_df.index = news_df.index.tz_localize('GMT').tz_convert('EST')
 
+        # Keep track of total amount of news gathered
+        news_counter += len(news_df.index)
+
         news_df.to_csv(DATA_FOLDER + ticker)
         logging.info(f" Stock {counter}/{len(tickers)}: Downloaded {len(news_df.index)} news for {ticker}")
         print(f" Stock {counter}/{len(tickers)}: Downloaded {len(news_df.index)} news for {ticker}")
+
+        if news_counter > 47000:
+            logging.info(f"Downloaded {news_counter} with key, stopping")
+            print(f"Downloaded {news_counter} with key, stopping")
+            break
 
 
 if __name__ == "__main__":
