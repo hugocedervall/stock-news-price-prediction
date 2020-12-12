@@ -3,6 +3,7 @@ import json
 import time
 
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 
 import constants
@@ -123,7 +124,7 @@ def process_all_stocks():
 STEPS = 1
 
 
-def get_news_market_impact():
+def get_news_market_impact(steps=[STEPS]):
     """
     :return: list of percentage changes
     """
@@ -133,49 +134,82 @@ def get_news_market_impact():
         return
 
     counter = 0
-    res_data = []
+    res_data = {x: [] for x in steps}
     for ticker, val in data.items():
         start_time = time.time()
-        news_df = get_news_df(ticker)
+        # news_df = get_news_df(ticker)
         price_df = get_price_df(ticker)
+        prices = price_df["close"]
         for news_event in val:
-            start_price = price_df.iloc[news_event["startPriceIndex"]].close
+            start_price = prices[news_event["startPriceIndex"]]
             end_price_index = news_event["endPriceIndex"]
-            index = news_event["startPriceIndex"] + STEPS
-            if index > end_price_index:
-                continue
-            end_price = price_df.iloc[index].close
-            res_data.append(end_price / start_price)
+            for step in steps:
+                index = news_event["startPriceIndex"] + step
+                if index > end_price_index:
+                    continue
+                end_price = prices[index]
+                res_data[step].append(end_price / start_price)
+
         counter += 1
         print(f"{counter}/{len(data)}, processed {ticker} in {time.time() - start_time} seconds")
 
     return res_data
 
 
-def get_price_changes():
+def get_price_changes(steps=[STEPS]):
     with open("index_data/index_data.json") as file:
         data = json.load(file)
     if not data:
         return
 
     counter = 0
-    res_data = []
+    res_data = {x: [] for x in steps}
     for ticker, val in data.items():
         start_time = time.time()
 
         price_df = get_price_df(ticker)
-        for i in range(len(price_df.index) - STEPS):
-            start_price = price_df.iloc[i].close
-            end_price = price_df.iloc[i+STEPS].close
-            res_data.append(end_price / start_price)
+        df_len = len(price_df.index)
+        prices = np.array(price_df["close"])
+        for i in range(df_len):
+            start_price = prices[i]
+            for step in steps:
+                index = i + step
+                if index >= df_len:
+                    break
+                end_price = prices[index]
+                res_data[step].append(end_price / start_price)
 
         counter += 1
         print(f"{counter}/{len(data)}, processed {ticker} in {time.time() - start_time} seconds")
 
-        if len(res_data) > 500000:
-            break
-
     return res_data
+
+
+def find_best_steps():
+    """
+    Goes through specified steps and find variance in price and news data
+    """
+    steps = [i for i in range(50, 201, 10)]
+    steps_res_folder = "steps_results/"
+
+    price_res = get_price_changes(steps)
+    news_res = get_news_market_impact(steps)
+
+    for step in steps:
+        price = np.array(price_res[step])
+        news = np.array(news_res[step])
+
+        try:
+            price_var = np.var(price[~np.isnan(price)])
+            news_var = np.var(news[~np.isnan(news)])
+
+            res = {"price_var": price_var, "news_var": news_var}
+
+            with open(steps_res_folder + str(step), 'w+') as file:
+                json.dump(res, file, indent=4)
+
+        except Exception as e:
+            print(e)
 
 
 if __name__ == "__main__":
