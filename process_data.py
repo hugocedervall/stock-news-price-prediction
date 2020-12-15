@@ -212,5 +212,61 @@ def find_best_steps():
             print(e)
 
 
+def get_indexing():
+    with open("index_data/index_data.json") as file:
+        data = json.load(file)
+    if not data:
+        return
+    return data
+
+
+def create_training_data():
+    # +/- 0.5 % determine negative/positive classes
+    threshold = 0.005
+    step = 1
+
+    data = get_indexing()
+
+    train_data = pd.DataFrame(columns=["datetime", "headline", "summary", "related", "lang", "source", "priceChangeClass"])
+
+    counter = 0
+    for ticker, news in data.items():
+        start_time = time.time()
+
+        price_df = get_price_df(ticker)
+        news_df = get_news_df(ticker)
+
+        prices = np.array(price_df["close"])
+
+        for news_event in news:
+            start_price = prices[news_event["startPriceIndex"]]
+            end_price_index = news_event["endPriceIndex"]
+
+            index = news_event["startPriceIndex"] + step
+            if index > end_price_index:
+                continue
+            end_price = prices[index]
+
+            percent_change = (end_price / start_price) - 1
+
+            news_class = 1
+            if percent_change > threshold:
+                news_class = 2
+            elif percent_change < -threshold:
+                news_class = 0
+
+            news_data = list(news_df.iloc[news_event["eventIndex"]])
+            news_data.append(news_class)
+
+            train_data.loc[-1] = news_data
+            train_data.index += 1
+        counter += 1
+        print(f"{counter}/{len(data)}, processed {ticker} in {time.time() - start_time} seconds")
+
+    train_data.to_csv("train_data")
+
+
+
 if __name__ == "__main__":
-    get_price_before_news("AAT")
+    #get_price_before_news("AAT")
+    create_training_data()
