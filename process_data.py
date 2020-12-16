@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+from datetime import datetime
+
 import constants
 
 
@@ -223,13 +225,20 @@ def get_indexing():
 def create_training_data():
     # +/- 0.5 % determine negative/positive classes
     threshold = 0.005
-    step = 1
+    steps = [1, 2, 3, 6]
+    amount_of_news = total_amount_news()
 
     data = get_indexing()
 
-    train_data = pd.DataFrame(columns=["datetime", "headline", "summary", "related", "lang", "source", "priceChangeClass"])
+    keys = ["datetime", "headline", "summary", "related", "lang", "source", "1stepChange", "2stepChange",
+            "3stepChange", "6stepChange"]
+
+    train_data_dict = {elem: [] for elem in keys}
+
+    total_time = time.time()
 
     counter = 0
+    processed_news_counter = 0
     for ticker, news in data.items():
         start_time = time.time()
 
@@ -238,35 +247,38 @@ def create_training_data():
 
         prices = np.array(price_df["close"])
 
+        news_counter = 0
         for news_event in news:
             start_price = prices[news_event["startPriceIndex"]]
             end_price_index = news_event["endPriceIndex"]
 
-            index = news_event["startPriceIndex"] + step
-            if index > end_price_index:
-                continue
-            end_price = prices[index]
-
-            percent_change = (end_price / start_price) - 1
-
-            news_class = 1
-            if percent_change > threshold:
-                news_class = 2
-            elif percent_change < -threshold:
-                news_class = 0
-
             news_data = list(news_df.iloc[news_event["eventIndex"]])
-            news_data.append(news_class)
 
-            train_data.loc[-1] = news_data
-            train_data.index += 1
+            for step in steps:
+                index = news_event["startPriceIndex"] + step
+                if index > end_price_index:
+                    news_data.append(-1)
+                    continue
+
+                end_price = prices[index]
+                percent_change = (end_price / start_price)
+                news_data.append(percent_change)
+
+            for index, elem in enumerate(keys):
+                train_data_dict[elem].append(news_data[index])
+
+            news_counter += 1
         counter += 1
-        print(f"{counter}/{len(data)}, processed {ticker} in {time.time() - start_time} seconds")
+        processed_news_counter += news_counter
+        time_left = (
+                (((time.time() - total_time)) / processed_news_counter) * (amount_of_news - processed_news_counter))
+        print(
+            f"{counter}/{len(data)}, processed {news_counter} news from {ticker} in {(time.time() - start_time):.2f} seconds. ETR: {time_left / 60:.0f} minutes")
 
-    train_data.to_csv("train_data")
-
+    train_data = pd.DataFrame.from_dict(train_data_dict)
+    train_data.to_csv(f"train_data_{str(datetime.strftime(datetime.now(), '%Y-%m-%d_%H:%M:%s'))}")
 
 
 if __name__ == "__main__":
-    #get_price_before_news("AAT")
+    # get_price_before_news("AAT")
     create_training_data()
