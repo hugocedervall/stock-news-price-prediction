@@ -19,6 +19,14 @@ def total_amount_news():
         total_news += len(df.index)
     return total_news
 
+def total_amount_price_points():
+    tickers = os.listdir(constants.PRICE_FOLDER)
+    total_prices = 0
+    for ticker in tickers:
+        df = pd.read_csv(constants.PRICE_FOLDER + ticker)
+        total_prices += len(df.index)
+    return total_prices
+
 
 def add_stock_timezone(stock_df):
     stock_df["time"] = pd.to_datetime(stock_df["time"])
@@ -223,8 +231,6 @@ def get_indexing():
 
 
 def create_training_data():
-    # +/- 0.5 % determine negative/positive classes
-    threshold = 0.005
     steps = [1, 2, 3, 6]
     amount_of_news = total_amount_news()
 

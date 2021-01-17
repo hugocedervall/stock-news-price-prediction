@@ -57,6 +57,8 @@ for unique_class in set(dataset.priceChangeClass):
 balanced_dataset = dataset.loc[indexes].sample(frac=1, random_state=seed).reset_index(drop=True)
 
 
+#balanced_dataset = dataset.reset_index(drop=True)
+
 # Divide data into train/valid/test
 val_percent = 0.1
 test_percent = 0.2
